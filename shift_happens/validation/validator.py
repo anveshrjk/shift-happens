@@ -56,20 +56,24 @@ def _check_staffing_feasibility(scenario: Scenario, result: ValidationResult) ->
 
 
 def _check_days_off_feasibility(scenario: Scenario, result: ValidationResult) -> None:
-    """Error if required days off exceed total days."""
+    """Error if required days off make the workload limits impossible."""
     wl = scenario.workload_limits
+
     if wl.min_days_off is not None and wl.min_days_off > scenario.num_days:
         result.errors.append(
             f"min_days_off ({wl.min_days_off}) exceeds the schedule length "
             f"({scenario.num_days} days)."
         )
 
-    if wl.min_days_off is not None and wl.max_shifts_per_employee is not None:
-        max_possible = scenario.num_days - wl.min_days_off
-        if wl.max_shifts_per_employee < max_possible:
-            # Not an error — just fewer shifts allowed.
-            pass
-        if wl.min_shifts_per_employee is not None:
+    # min_shifts_per_employee must be achievable within the workable days
+    if wl.min_shifts_per_employee is not None:
+        if wl.min_shifts_per_employee > scenario.num_days:
+            result.errors.append(
+                f"min_shifts_per_employee ({wl.min_shifts_per_employee}) exceeds "
+                f"the schedule length ({scenario.num_days} days)."
+            )
+        if wl.min_days_off is not None:
+            max_possible = scenario.num_days - wl.min_days_off
             if wl.min_shifts_per_employee > max_possible:
                 result.errors.append(
                     f"min_shifts_per_employee ({wl.min_shifts_per_employee}) is "

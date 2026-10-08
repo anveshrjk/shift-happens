@@ -55,8 +55,22 @@ def solve(scenario: Scenario, timeout_s: float = 60.0) -> ScheduleSolution:
             for s in shift_names:
                 x[(e, d, s)] = model.new_bool_var(f"x_{e}_{d}_{s}")
 
-    # Collect soft-penalty variables for the objective
-    soft_penalties: list[cp_model.LinearExpr] = []
+    # Collect objective terms.
+    #
+    # We use a three-tier weighting scheme so that different concerns
+    # don't interfere with each other:
+    #
+    #   Tier 1 (highest) — User-specified soft-constraint penalties.
+    #                       Scaled by PENALTY_SCALE so they always dominate.
+    #   Tier 2            — Per-assignment cost (prefer lean staffing).
+    #                       Weight = 1 per assignment variable.
+    #   Tier 3 (lowest)  — Workload-balance spread (prefer even distribution
+    #                       among the assignments that *are* made).
+    #                       Weight = 1 for the whole spread.
+    #
+    PENALTY_SCALE = 10  # multiplier for user soft-constraint penalties
+
+    objective_terms: list[cp_model.LinearExpr] = []
 
     # ------------------------------------------------------------------
     # C1: Each employee works at most one shift per day
@@ -78,16 +92,15 @@ def solve(scenario: Scenario, timeout_s: float = 60.0) -> ScheduleSolution:
     # C3: Employee shift restrictions
     # ------------------------------------------------------------------
     for restr in scenario.employee_shift_restrictions:
-        var = x[(restr.employee_id, 0, restr.shift_type)]  # placeholder — see below
         # Apply across ALL days (restriction is shift-type-wide)
         for d in days:
             var = x[(restr.employee_id, d, restr.shift_type)]
             if restr.priority == ConstraintPriority.HARD:
                 model.add(var == 0)
             else:
-                # Soft: penalize if assigned
+                # Soft: penalize if assigned (Tier 1)
                 penalty = restr.penalty if restr.penalty > 0 else 1
-                soft_penalties.append(var * penalty)
+                objective_terms.append(var * (penalty * PENALTY_SCALE))
 
     # ------------------------------------------------------------------
     # C4: Employee unavailability
@@ -99,7 +112,7 @@ def solve(scenario: Scenario, timeout_s: float = 60.0) -> ScheduleSolution:
                 model.add(var == 0)
             else:
                 penalty = avail.penalty if avail.penalty > 0 else 1
-                soft_penalties.append(var * penalty)
+                objective_terms.append(var * (penalty * PENALTY_SCALE))
 
     # ------------------------------------------------------------------
     # C5: Workload limits
@@ -117,18 +130,6 @@ def solve(scenario: Scenario, timeout_s: float = 60.0) -> ScheduleSolution:
 
         # Days off = days with no shift
         if wl.min_days_off is not None:
-            days_worked = sum(
-                model.new_bool_var(f"worked_{e}_{d}") for d in days
-            )
-            # We need a proper "worked on day d" indicator
-            for d in days:
-                worked_d = model.new_bool_var(f"worked_{e}_{d}_ind")
-                shifts_on_d = sum(x[(e, d, s)] for s in shift_names)
-                # worked_d == 1 iff shifts_on_d >= 1
-                model.add(shifts_on_d >= 1).only_enforce_if(worked_d)
-                model.add(shifts_on_d == 0).only_enforce_if(worked_d.negated())
-
-            # Recompute using proper indicators
             worked_vars = []
             for d in days:
                 wv = model.new_bool_var(f"wk_{e}_{d}")
@@ -153,10 +154,19 @@ def solve(scenario: Scenario, timeout_s: float = 60.0) -> ScheduleSolution:
                 model.add(shifts_in_window <= mc)
 
     # ------------------------------------------------------------------
-    # Objective: minimize soft penalties + (small) balance term
+    # Objective
     # ------------------------------------------------------------------
-    # Balance term: minimize the spread of total shifts across employees
-    # (encourages even workload distribution)
+
+    # Tier 2: Per-assignment cost — prefer lean staffing.
+    # Without this, the solver has no reason to avoid unnecessary
+    # assignments when min_employees < num_employees and no max is set.
+    for e in employee_ids:
+        for d in days:
+            for s in shift_names:
+                objective_terms.append(x[(e, d, s)])
+
+    # Tier 3: Workload-balance spread — among the assignments that ARE
+    # made, prefer an even distribution across employees.
     if len(employee_ids) > 1:
         totals = []
         for e in employee_ids:
@@ -171,11 +181,10 @@ def solve(scenario: Scenario, timeout_s: float = 60.0) -> ScheduleSolution:
         spread = model.new_int_var(0, scenario.num_days, "spread")
         model.add(spread == max_total - min_total)
 
-        # Weight: 1 per unit of spread (low priority relative to explicit penalties)
-        soft_penalties.append(spread)
+        objective_terms.append(spread)
 
-    if soft_penalties:
-        model.minimize(sum(soft_penalties))
+    if objective_terms:
+        model.minimize(sum(objective_terms))
     else:
         # No objective — any feasible solution is fine.
         pass
@@ -235,7 +244,7 @@ def solve(scenario: Scenario, timeout_s: float = 60.0) -> ScheduleSolution:
     return ScheduleSolution(
         status=status,
         assignments=assignments,
-        objective_value=solver.objective_value if soft_penalties else 0.0,
+        objective_value=solver.objective_value if objective_terms else 0.0,
         metrics=metrics,
         solver_wall_time_s=round(wall_time, 4),
     )
