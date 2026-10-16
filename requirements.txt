@@ -5,3 +5,5 @@ streamlit>=1.30
 plotly>=5.0
 pytest>=7.0
 pytest-cov>=4.0
+# Optional: only needed for live LLM parsing (not required for tests)
+# google-genai>=1.0

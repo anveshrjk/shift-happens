@@ -13,16 +13,17 @@
 - More comprehensive tests
 - Edge case handling
 
-## Phase 3 — Natural-Language Parsing
-- LLM provider implementation
-- NL → structured scenario pipeline
-- Prompt engineering
-- Structured output validation
+## Phase 3 — Natural-Language Parsing ✅
+- LLM provider abstraction (`LLMProvider`, `GoogleGeminiProvider`, `MockLLMProvider`)
+- NL → structured scenario pipeline (`parse_natural_language()`)
+- Schema-embedded system prompt with Pydantic JSON schema
+- Structured output validation with explicit error taxonomy
+- 52 parser/provider tests (all deterministic, no API key required)
 
-## Phase 4 — End-to-End Pipeline
-- NL → parser → validator → solver → solution
-- Error handling across the pipeline
-- Integration tests
+## Phase 4 — End-to-End Pipeline (partial)
+- NL → parser → validator → solver → solution ✅ (tested in `test_parser.py`)
+- Error handling across the pipeline ✅
+- Integration tests ✅
 
 ## Phase 5 — What-If Simulation
 - Scenario modification API

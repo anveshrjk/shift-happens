@@ -12,6 +12,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+llm = [
+    "google-genai>=1.0",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",

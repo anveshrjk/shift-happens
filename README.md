@@ -20,16 +20,19 @@ The LLM is never the source of truth for constraint satisfaction.
 
 ## Current Status
 
-**Phase 1 — Foundation** (implemented):
+**Phase 1 — Foundation** ✅:
 - Pydantic models for scenarios and solutions
 - OR-Tools CP-SAT scheduler with hard/soft constraints
 - Input validation
-- Basic test suite
+- 44 tests
+
+**Phase 3 — Natural-Language Parsing** ✅:
+- LLM provider abstraction (Gemini, Mock)
+- NL → Scenario parsing pipeline with error taxonomy
+- 52 parser/provider tests
+- 96 total tests passing
 
 **Planned**:
-- Phase 2: Constraint validation + metrics + more tests
-- Phase 3: Natural-language parsing via LLM
-- Phase 4: End-to-end pipeline
 - Phase 5: What-if simulation
 - Phase 6: Explanation + visualization + UI
 - Phase 7: Evaluation benchmark
@@ -39,9 +42,10 @@ The LLM is never the source of truth for constraint satisfaction.
 - Python 3.10+
 - Pydantic 2.x
 - Google OR-Tools CP-SAT
+- Google Gemini API (`google-genai`, optional)
 - Pandas
-- Streamlit (UI)
-- Plotly (visualization)
+- Streamlit (UI, planned)
+- Plotly (visualization, planned)
 - Pytest (testing)
 
 ## Quick Start
@@ -51,7 +55,24 @@ pip install -r requirements.txt
 pytest
 ```
 
-## Usage (Phase 1 — Python API)
+## Gemini API Setup (for live NL parsing)
+
+```bash
+pip install google-genai
+```
+
+Set the API key as an environment variable:
+```bash
+# Linux/macOS
+export GEMINI_API_KEY="your-api-key-here"
+
+# Windows PowerShell
+$env:GEMINI_API_KEY = "your-api-key-here"
+```
+
+The test suite runs entirely without an API key using `MockLLMProvider`.
+
+## Usage — Direct Scenario (Python API)
 
 ```python
 from shift_happens.models.scenario import *
@@ -71,6 +92,33 @@ solution = solve(scenario)
 print(solution.status)       # optimal
 print(solution.assignments)  # list of Assignment objects
 print(solution.metrics)      # ScheduleMetrics
+```
+
+## Usage — Natural-Language Parsing (requires API key)
+
+```python
+from shift_happens.llm.provider import GoogleGeminiProvider
+from shift_happens.parser.nl_parser import parse_natural_language
+from shift_happens.solver.scheduler import solve
+
+provider = GoogleGeminiProvider()  # uses GEMINI_API_KEY env var
+
+result = parse_natural_language(
+    "Schedule 5 employees across morning and night shifts for 7 days. "
+    "Each shift needs 2 people. Everyone gets at least 2 days off. "
+    "Alice cannot work night shifts.",
+    provider,
+)
+
+if result.success:
+    solution = solve(result.scenario)
+    print(solution.status)
+    for a in solution.assignments:
+        print(f"  Day {a.day}: {a.employee_name} → {a.shift_type}")
+else:
+    print(f"Parsing failed ({result.error_kind}):")
+    for err in result.errors:
+        print(f"  - {err}")
 ```
 
 ## License
