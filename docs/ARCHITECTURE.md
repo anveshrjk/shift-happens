@@ -66,6 +66,25 @@ Pydantic models defining the data contracts:
   - `SEMANTIC_ERROR` — Valid structure but logically infeasible
 - Successful results include a solver-ready `Scenario` and any warnings
 
+### pipeline.py
+`pipeline.py` — End-to-end orchestration:
+- `schedule(request, provider)` — Single entry point for NL → schedule
+- Chains: parser → validator → solver
+- Returns `PipelineResult` with status:
+  - `SUCCESS` — Parsed and solved (optimal or feasible)
+  - `INFEASIBLE` — Parsed OK, but no feasible schedule exists
+  - `PARSE_FAILED` — Could not produce a valid Scenario
+  - `SOLVER_ERROR` — Solver crashed or timed out
+  - `INTERNAL_ERROR` — Unexpected exception
+- Invalid scenarios never reach the solver
+
+### cli.py
+`cli.py` — Minimal CLI for running the pipeline:
+- `python -m shift_happens.cli "Schedule 5 employees..."`
+- `python -m shift_happens.cli --file request.txt`
+- Requires `GEMINI_API_KEY` environment variable
+- No API key needed for automated tests
+
 ### simulation/ (stub)
 What-if scenario modification and comparison.
 
@@ -77,21 +96,26 @@ Streamlit web interface.
 
 ## Data Flow
 
-### NL Parsing Pipeline
+### End-to-End Pipeline
 ```
 Natural-language text
-  → LLMProvider.parse_scenario()
-  → raw dict (untrusted)
-  → Scenario.model_validate() (Pydantic)
-  → validate_scenario() (semantic checks)
-  → ParseResult (with Scenario or errors)
+  → LLMProvider.parse_scenario()  → raw dict (untrusted)
+  → Scenario.model_validate()     → Pydantic schema checks
+  → validate_scenario()           → semantic feasibility checks
+  → solve()                       → OR-Tools CP-SAT optimization
+  → PipelineResult                → status + scenario + solution + metrics
 ```
 
-### Solving Pipeline
+### Failure Modes
 ```
-ParseResult.scenario
-  → solve() (OR-Tools CP-SAT)
-  → ScheduleSolution (assignments, metrics, status)
+Empty input          → PARSE_FAILED (EMPTY_INPUT)
+API failure          → PARSE_FAILED (PROVIDER_ERROR)
+Bad JSON from LLM    → PARSE_FAILED (INVALID_JSON)
+Non-scheduling input → PARSE_FAILED (NOT_SCHEDULING)
+Schema mismatch      → PARSE_FAILED (SCHEMA_ERROR)
+Semantically invalid → PARSE_FAILED (SEMANTIC_ERROR) — solver NOT called
+Solver infeasible    → INFEASIBLE — constraints conflict
+Solver crash/timeout → SOLVER_ERROR
 ```
 
 ## Constraint Model

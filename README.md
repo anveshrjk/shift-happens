@@ -30,7 +30,12 @@ The LLM is never the source of truth for constraint satisfaction.
 - LLM provider abstraction (Gemini, Mock)
 - NL → Scenario parsing pipeline with error taxonomy
 - 52 parser/provider tests
-- 96 total tests passing
+
+**Phase 4 — End-to-End Pipeline** ✅:
+- `schedule()` orchestrator: NL → parse → validate → solve
+- CLI: `python -m shift_happens.cli "..."`
+- 27 integration tests
+- 123 total tests passing
 
 **Planned**:
 - Phase 5: What-if simulation
@@ -72,6 +77,44 @@ $env:GEMINI_API_KEY = "your-api-key-here"
 
 The test suite runs entirely without an API key using `MockLLMProvider`.
 
+## Usage — End-to-End Pipeline (recommended)
+
+```python
+from shift_happens.llm.provider import GoogleGeminiProvider
+from shift_happens.pipeline import PipelineStatus, schedule
+
+provider = GoogleGeminiProvider()  # uses GEMINI_API_KEY env var
+
+result = schedule(
+    "Schedule 5 employees across morning and night shifts for 7 days. "
+    "Each shift needs 2 people. Everyone gets at least 2 days off. "
+    "Alice cannot work night shifts.",
+    provider,
+)
+
+if result.status == PipelineStatus.SUCCESS:
+    print(f"Schedule created: {result.solution.status.value}")
+    print(f"Assignments: {result.solution.metrics.total_assignments}")
+    for a in result.solution.assignments:
+        print(f"  Day {a.day}: {a.employee_name} → {a.shift_type}")
+elif result.status == PipelineStatus.INFEASIBLE:
+    print("No feasible schedule found.")
+    for e in result.errors:
+        print(f"  {e}")
+else:
+    print(f"Failed ({result.status.value}):")
+    for e in result.errors:
+        print(f"  - {e}")
+```
+
+## Usage — CLI (requires API key)
+
+```bash
+python -m shift_happens.cli "Schedule 3 employees for 5 days with morning and night shifts."
+python -m shift_happens.cli --file request.txt
+python -m shift_happens.cli --timeout 30 "..."
+```
+
 ## Usage — Direct Scenario (Python API)
 
 ```python
@@ -92,33 +135,6 @@ solution = solve(scenario)
 print(solution.status)       # optimal
 print(solution.assignments)  # list of Assignment objects
 print(solution.metrics)      # ScheduleMetrics
-```
-
-## Usage — Natural-Language Parsing (requires API key)
-
-```python
-from shift_happens.llm.provider import GoogleGeminiProvider
-from shift_happens.parser.nl_parser import parse_natural_language
-from shift_happens.solver.scheduler import solve
-
-provider = GoogleGeminiProvider()  # uses GEMINI_API_KEY env var
-
-result = parse_natural_language(
-    "Schedule 5 employees across morning and night shifts for 7 days. "
-    "Each shift needs 2 people. Everyone gets at least 2 days off. "
-    "Alice cannot work night shifts.",
-    provider,
-)
-
-if result.success:
-    solution = solve(result.scenario)
-    print(solution.status)
-    for a in solution.assignments:
-        print(f"  Day {a.day}: {a.employee_name} → {a.shift_type}")
-else:
-    print(f"Parsing failed ({result.error_kind}):")
-    for err in result.errors:
-        print(f"  - {err}")
 ```
 
 ## License

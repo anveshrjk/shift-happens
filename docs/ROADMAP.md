@@ -20,10 +20,12 @@
 - Structured output validation with explicit error taxonomy
 - 52 parser/provider tests (all deterministic, no API key required)
 
-## Phase 4 — End-to-End Pipeline (partial)
-- NL → parser → validator → solver → solution ✅ (tested in `test_parser.py`)
-- Error handling across the pipeline ✅
-- Integration tests ✅
+## Phase 4 — End-to-End Pipeline ✅
+- `schedule()` orchestrator: NL → parse → validate → solve → `PipelineResult`
+- `PipelineStatus` taxonomy: SUCCESS, INFEASIBLE, PARSE_FAILED, SOLVER_ERROR, INTERNAL_ERROR
+- CLI entry point: `python -m shift_happens.cli`
+- 27 integration tests (all deterministic, no API key required)
+- 123 total tests passing
 
 ## Phase 5 — What-If Simulation
 - Scenario modification API
