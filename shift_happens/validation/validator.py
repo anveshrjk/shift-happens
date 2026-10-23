@@ -25,7 +25,7 @@ def validate_scenario(scenario: Scenario) -> ValidationResult:
     """Run all semantic checks on *scenario* and return a ValidationResult.
 
     This does NOT duplicate the Pydantic model_validator checks (those already
-    ran at construction time).  Instead it looks for problems the solver is
+    ran at construction time). Instead, it looks for problems the solver is
     likely to hit, such as obviously infeasible staffing requirements.
     """
     result = ValidationResult()
