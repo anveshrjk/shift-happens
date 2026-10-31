@@ -31,6 +31,7 @@ Thumbs.db
 .pytest_cache/
 htmlcov/
 .coverage
+/benchmark_results/
 
 # Misc
 *.log
