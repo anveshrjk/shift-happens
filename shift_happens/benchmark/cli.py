@@ -56,6 +56,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     """Run the benchmark and produce reports."""
+    # Ensure stdout handles Unicode on Windows
+    import io
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     args = _build_parser().parse_args(argv)
 
     from shift_happens.benchmark.runner import run_benchmark
